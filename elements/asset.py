@@ -276,53 +276,18 @@ def text_display(obj, draw, type):
 import warnings
 warnings.filterwarnings('ignore')
 def ui(frame, yoloOutput, light_detector, signOutput, depth_values):
-
-    background = 255*np.ones((720, 280, 3)).astype('uint8')
+    # Create background with same height as input frame (720 pixels)
+    background = 255*np.ones((720, 280, 3)).astype('uint8')  # Changed back to 720 height
     bg_rgb = cv2.cvtColor(background, cv2.COLOR_BGR2RGB)
     pil_im = Image.fromarray(bg_rgb)
     draw = ImageDraw.Draw(pil_im)
-    
-    # Traffic Light
-    lights = yoloOutput.loc[yoloOutput['class'] == 9]
-    df= lights.copy()
-    
-    if len(lights) >= 1:
-        df['area'] = (lights["ymax"] - lights["ymin"]) * (lights["xmax"] - lights["xmin"])
-        lights_1 = lights.loc[df['area'] == df['area'].max()]
 
-        if len(df) > 1:
-            lights_2 = lights.loc[df['area'] == df['area'].nlargest(2).values[1]] 
-            light_color_1 = light_detector.classify(frame[int(lights_1["ymin"]): int(lights_1["ymax"]), int(lights_1["xmin"]): int(lights_1["xmax"])])
-            light_color_2 = light_detector.classify(frame[int(lights_2["ymin"]): int(lights_2["ymax"]), int(lights_2["xmin"]): int(lights_2["xmax"])])
-            light_color_3 = None
+    # Create a white space at the top
+    # The actual content will start from the middle-bottom portion
 
-            if len(df) > 2:
-                lights_3 = lights.loc[df['area'] == df['area'].nlargest(3).values[2]] 
-                light_color_3 = light_detector.classify(frame[int(lights_3["ymin"]): int(lights_3["ymax"]), int(lights_3["xmin"]): int(lights_3["xmax"])])
-
-
-            if (light_color_1 == 'off') and (light_color_3 == 'None'):
-                light_color = light_color_2
-            elif (light_color_1 == 'off') and (light_color_2 == 'off') and (light_color_3 != None):
-                light_color = light_color_3
-            else:
-                light_color = light_color_1
-        else:  
-            light_color = light_detector.classify(frame[int(lights_1["ymin"]): int(lights_1["ymax"]), int(lights_1["xmin"]): int(lights_1["xmax"])])
-
-        light_img = obj_display(light_color, type='light')
-        background[60:340, 75:205] = light_img
-        text_display(light_color, draw, type='light')
-        
-    else:
-        off_img = obj_display('off', type='light')
-        background[60:340, 75:205] = off_img
-        draw.text((10, 10), f"Not Detected!", (0,0,0) , font=font)
-    
-
-    # Sign
+    # Sign Detection (moved to middle section, around y=400)
     stop_sign = yoloOutput.loc[yoloOutput['class'] == 11]
-    
+
     if len(stop_sign) >= 1:
         stop_sign['area'] = (stop_sign["ymax"] - stop_sign["ymin"]) * (stop_sign["xmax"] - stop_sign["xmin"])
         stop_sign = stop_sign.loc[stop_sign['area'] == stop_sign['area'].max()]
@@ -332,49 +297,45 @@ def ui(frame, yoloOutput, light_detector, signOutput, depth_values):
         signOutput = signOutput.loc[signOutput['area'] == signOutput['area'].max()]
 
     if len(stop_sign) >= 1  and len(signOutput) >= 1:
-        if (stop_sign['area'].values[0] > signOutput['area'].values[0]) and (stop_sign['confidence'].values[0] > signOutput['confidence'].values[0]) : 
+        if (stop_sign['area'].values[0] > signOutput['area'].values[0]) and (stop_sign['confidence'].values[0] > signOutput['confidence'].values[0]):
             sign_img = obj_display('stop sign', type='sign')
-            background[430:580, 65:215] = sign_img
-            text_display('stop sign', draw, type='sign')
-        else: 
+            background[400:550, 65:215] = sign_img  # Adjusted y-coordinates
+            draw.text((10, 370), f"Detected Sign: stop sign!", (0,0,0), font=sign_font)  # Adjusted y-coordinate
+        else:
             sign_img = obj_display(signOutput['name'].values[0], type='sign')
-            background[430:580, 65:215] = sign_img
-            text_display(signOutput['name'].values[0], draw, type='sign')
+            background[400:550, 65:215] = sign_img  # Adjusted y-coordinates
+            draw.text((10, 370), f"Detected Sign: {signOutput['name'].values[0]}!", (0,0,0), font=sign_font)  # Adjusted y-coordinate
 
     elif len(stop_sign) >= 1 and len(signOutput) < 1:
-            sign_img = obj_display('stop sign', type='sign')
-            background[430:580, 65:215] = sign_img
-            text_display('stop sign', draw, type='sign')
+        sign_img = obj_display('stop sign', type='sign')
+        background[400:550, 65:215] = sign_img  # Adjusted y-coordinates
+        draw.text((10, 370), f"Detected Sign: stop sign!", (0,0,0), font=sign_font)  # Adjusted y-coordinate
 
     elif len(signOutput) >= 1 and len(stop_sign) < 1:
-            sign_img = obj_display(signOutput['name'].values[0], type='sign')
-            background[430:580, 65:215] = sign_img
-            text_display(signOutput['name'].values[0], draw, type='sign')
+        sign_img = obj_display(signOutput['name'].values[0], type='sign')
+        background[400:550, 65:215] = sign_img  # Adjusted y-coordinates
+        draw.text((10, 370), f"Detected Sign: {signOutput['name'].values[0]}!", (0,0,0), font=sign_font)  # Adjusted y-coordinate
 
     else:
-        draw.text((10, 380), f"No Sign Detected!", (0,0,0) , font=font)
+        draw.text((10, 370), f"No Sign Detected!", (0,0,0), font=font)  # Adjusted y-coordinate
 
+    # Boundary between sign and distance measurement
+    draw.line([(25, 580), (255, 580)], fill=(0,0,0), width=2)  # Adjusted y-coordinate
 
-    # Distance Measurement Display
-    safe_zone_thresh = 5 # meter
-    draw.text((10, 620), "Nearest Distance:", (0,0,0) , font=font)
+    # Distance Measurement Display (moved to bottom section)
+    safe_zone_thresh = 5  # meter
+    draw.text((10, 600), "Nearest Distance:", (0,0,0), font=font)  # Adjusted y-coordinate
     if depth_values:
-        if min(depth_values) <= safe_zone_thresh: # set safe zone threshold
-            draw.text((100, 660), f"{min(depth_values):.2f} m", (0,0,0) , font=font)
+        if min(depth_values) <= safe_zone_thresh:
+            draw.text((100, 640), f"{min(depth_values):.2f} m", (0,0,0), font=font)  # Adjusted y-coordinate
         else:
-            draw.text((80, 660), "Safe Zone :)", (0,0,0) , font=font)
-    else: 
-        draw.text((80, 660), "Safe Zone :)", (0,0,0) , font=font)
-
-    # Boundary between light and sign   
-    draw.line([(25, 360), (255, 360)], fill =(0,0,0), width = 2)
-
-    # Boundary between sign and distance  
-    draw.line([(25, 600), (255, 600)], fill =(0,0,0), width = 2)
+            draw.text((80, 640), "Safe Zone :)", (0,0,0), font=font)  # Adjusted y-coordinate
+    else:
+        draw.text((80, 640), "Safe Zone :)", (0,0,0), font=font)  # Adjusted y-coordinate
 
     cv2_format = cv2.cvtColor(np.array(pil_im), cv2.COLOR_RGB2BGR)/255.
     background = background / 255.
-    
+
     out = np.clip(background * cv2_format * 255, 0, 255).astype('uint8')
 
-    return  out
+    return out
